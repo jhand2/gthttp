@@ -1,0 +1,8 @@
+[package]
+name = "gthttp"
+version = "0.1.0"
+authors = ["Jordan Hand <jordanhand22@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+arpspoofr = { path = "../arpspoofr" }
