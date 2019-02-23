@@ -7,7 +7,7 @@ readme = "README.md"
 
 [dependencies]
 clap = "2"
-pnet = "0.21"
+pnet = "0.22"
 env_logger = "0.5"
 log = "0.4"
 error-chain = "0.11"
