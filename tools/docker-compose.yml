@@ -1,0 +1,9 @@
+version: '3'
+services:
+    gthttp:
+        image: "gthttp:latest"
+    target1:
+        image: "alpine:latest"
+    target2:
+        image: "alpine:latest"
+

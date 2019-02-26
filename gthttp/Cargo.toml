@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 arpspoofr = { path = "../arpspoofr" }
+pnet = "0.22"
