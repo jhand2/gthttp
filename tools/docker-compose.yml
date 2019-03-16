@@ -2,8 +2,17 @@ version: '3'
 services:
     gthttp:
         image: "gthttp:latest"
+        stdin_open: true
+        tty: true
+        command: ["bash"]
     target1:
         image: "alpine:latest"
+        stdin_open: true
+        tty: true
+        command: ["sh"]
     target2:
         image: "alpine:latest"
+        stdin_open: true
+        tty: true
+        command: ["sh"]
 

