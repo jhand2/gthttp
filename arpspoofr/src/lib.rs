@@ -9,9 +9,6 @@ use pnet::packet::{MutablePacket, Packet};
 use pnet::packet::arp::{ArpHardwareTypes, ArpOperation, ArpOperations};
 use pnet::packet::arp::{ArpPacket, MutableArpPacket};
 
-use pnet::packet::PrimitiveValues;
-
-
 pub fn open_interface(interface: &str)
         -> (Box<DataLinkSender>, Box<DataLinkReceiver>, NetworkInterface) {
     
