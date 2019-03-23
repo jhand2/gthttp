@@ -2,9 +2,8 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 LOG_DIR=$SCRIPT_DIR/logs
-TOOLS_DIR=$SCRIPT_DIR/../tools
 
-COMPOSE="docker-compose --no-ansi -f $TOOLS_DIR/docker-compose.yml"
+COMPOSE="docker-compose --no-ansi -f $SCRIPT_DIR/docker-compose.yml"
 
 mkdir -p $LOG_DIR
 

