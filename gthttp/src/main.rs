@@ -2,17 +2,18 @@ extern crate clap;
 extern crate ctrlc;
 extern crate arpspoofr;
 
+pub mod util;
+
+use util::*;
+
 use arpspoofr::*;
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::thread;
 use std::sync::Arc;
-use std::time::Duration;
 use clap::{App, Arg};
 
 use pnet::datalink::MacAddr;
-use pnet::packet::arp::ArpOperations;
-use pnet::datalink::DataLinkSender;
 
 struct Arguments {
     interface: String,
@@ -58,19 +59,6 @@ fn parse_args() -> Arguments {
     }
 }
 
-fn spoof_arp(tx: &mut DataLinkSender,
-             local_mac: MacAddr,
-             source_ip: Ipv4Addr,
-             source_mac: MacAddr,
-             target_ip: Ipv4Addr,
-             target_mac: MacAddr) {
-    // Send packet to bind source ip to local mac
-    send_arp(&mut *tx, source_ip, local_mac, target_ip, target_mac, ArpOperations::Reply);
-
-    // Send packet to bind target ip to local mac
-    send_arp(&mut *tx, target_ip, local_mac, source_ip, source_mac, ArpOperations::Reply);
-}
-
 struct GthttpCtx {
     interface: String,
     local_ip: Ipv4Addr,
@@ -106,7 +94,6 @@ fn collect_target_info() -> GthttpCtx {
         source_mac: source_mac,
         target_ip: args.target_ip,
         target_mac: target_mac,
-
     }
 }
 
@@ -117,32 +104,23 @@ fn main() {
     println!("Source MAC: {}", ctx.source_mac);
     println!("Target MAC: {}", ctx.target_mac);
 
+    let ctx2 = ctx.clone();
+    ctrlc::set_handler(move || {
+        println!("\nReceived Ctrl+C!");
+        // Borrow cause I guess that works? IDK, rust is weird
+        let ctx = &ctx2;
+        restore_arp_state(&ctx.interface, ctx.source_ip, ctx.source_mac,
+                          ctx.target_ip, ctx.target_mac);
+        std::process::exit(0);
+    }).expect("Error setting Ctrl-C handler");
+
     // Spoof arp responses so we can receive traffic for the source and target
     let ctx1 = ctx.clone();
     let arp_spoof_thread = thread::spawn(move || {
         let ctx = ctx1;
-        let (mut tx, _, _) = open_interface(&ctx.interface);
-        loop {
-            spoof_arp(&mut *tx, ctx.local_mac, ctx.source_ip, ctx.source_mac,
-                      ctx.target_ip, ctx.target_mac);
-            thread::sleep(Duration::from_millis(1000));
-        }
+        arp_spoof_loop(&ctx.interface, ctx.local_mac, ctx.source_ip, ctx.source_mac,
+                  ctx.target_ip, ctx.target_mac);
     });
 
     let _res = arp_spoof_thread.join();
-
-    let ctx2 = ctx.clone();
-    ctrlc::set_handler(move || {
-        println!("received Ctrl+C!");
-
-        // Borrow cause I guess that works? IDK, rust is weird
-        let ctx = &ctx2;
-        let (mut tx, _, _) = open_interface(&ctx.interface);
-
-        // Restore correct state of the world
-        send_arp(&mut *tx, ctx.source_ip, ctx.source_mac,
-                 ctx.target_ip, ctx.target_mac, ArpOperations::Reply);
-        send_arp(&mut *tx, ctx.target_ip, ctx.target_mac,
-                 ctx.source_ip, ctx.source_mac, ArpOperations::Reply);
-    }).expect("Error setting Ctrl-C handler");
 }

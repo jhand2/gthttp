@@ -31,5 +31,4 @@ COPY ./gthttp/src/ ./gthttp/src/
 
 # Full build
 RUN cargo build
-RUN cargo install --path gthttp
 

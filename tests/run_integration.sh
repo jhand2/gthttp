@@ -4,6 +4,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 LOG_DIR=$SCRIPT_DIR/logs
 
 COMPOSE="docker-compose --no-ansi -f $SCRIPT_DIR/docker-compose.yml"
+GTHTTP="/gthttp/target/debug/gthttp"
 
 mkdir -p $LOG_DIR
 
@@ -19,7 +20,7 @@ run_tests() {
     IP2=$(lookup_docker_ip "target2")
 
     # Target static IPs of the alpine machines
-    $COMPOSE exec gthttp gthttp eth0 $IP1 $IP2
+    $COMPOSE exec gthttp $GTHTTP eth0 $IP1 $IP2
 }
 
 up() {
