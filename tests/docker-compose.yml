@@ -1,0 +1,44 @@
+version: '2'
+services:
+  gthttp:
+    image: "gthttp:latest"
+    stdin_open: true
+    tty: true
+    ports:
+      - 8080:8080
+    #networks:
+      #dock_net:
+        #ipv4_address: "127.0.0.2"
+  target1:
+    image: "alpine:latest"
+    stdin_open: true
+    tty: true
+    ports:
+      - 8081:8080
+    #networks:
+      #dock_net:
+        #ipv4_address: "127.0.0.3"
+  target2:
+    image: "alpine:latest"
+    stdin_open: true
+    tty: true
+    ports:
+      - 8082:8080
+    #networks:
+      #dock_net:
+        #ipv4_address: "127.0.0.4"
+
+#networks:
+  #dock_net:
+    #driver: bridge
+    #ipam:
+      #config:
+      #- subnet: 172.1.0.0/16
+        #gateway: 172.1.0.1
+    #driver_opts:
+      #com.docker.network.bridge.default_bridge: "true"
+      #com.docker.network.bridge.enable_icc: "true"
+      #com.docker.network.bridge.enable_ip_masquerade: "true"
+      #com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+      #com.docker.network.driver.mtu: "9001"
+              

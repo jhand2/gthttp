@@ -5,7 +5,7 @@
 FROM rust:1.32
 
 RUN apt-get update
-RUN apt-get -y install arping net-tools
+RUN apt-get -y install arping dsniff net-tools tcpdump
 
 # Do all this to cache dependencies because docker is too dumb
 # to know what to do
