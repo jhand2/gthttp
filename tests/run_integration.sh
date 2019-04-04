@@ -19,6 +19,9 @@ run_tests() {
     IP1=$(lookup_docker_ip "target1")
     IP2=$(lookup_docker_ip "target2")
 
+    echo $IP1
+    echo $IP2
+
     # Target static IPs of the alpine machines
     $COMPOSE exec gthttp $GTHTTP eth0 $IP1 $IP2
 }

@@ -1,2 +1,11 @@
-[workspace]
-members = ["gthttp", "arpspoofr", "shijackr"]
+[package]
+name = "gthttp"
+version = "0.1.0"
+authors = ["Jordan Hand <jordanhand22@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2"
+pnet = "0.22"
+ctrlc = "3.1.1"
+

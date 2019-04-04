@@ -7,27 +7,21 @@ FROM rust:1.32
 RUN apt-get update
 RUN apt-get -y install arping dsniff net-tools tcpdump
 
-# Do all this to cache dependencies because docker is too dumb
+# Do this to cache dependencies because docker is too dumb
 # to know what to do
 WORKDIR /gthttp
-RUN USER=root cargo new --bin shijackr
-RUN USER=root cargo new --lib arpspoofr
-RUN USER=root cargo new --bin gthttp
+RUN USER=root cargo init
 COPY ./Cargo.toml ./
-COPY ./arpspoofr/Cargo.toml ./arpspoofr/
-COPY ./shijackr/Cargo.toml ./shijackr/
-COPY ./gthttp/Cargo.toml ./gthttp/
 
 # Cache deps
 RUN cargo build
-RUN rm **/src/*.rs
-# Force next build to recompile local library dependencies
-RUN rm ./target/debug/deps/libarpspoofr*
+RUN rm src/*.rs
+RUN rm ./target/debug/gthttp
+RUN rm -r ./target/debug/gthttp.d
+RUN rm -r ./target/debug/incremental
 
 # Copy sources
-COPY ./arpspoofr/src/ ./arpspoofr/src/
-COPY ./shijackr/src/ ./shijackr/src/
-COPY ./gthttp/src/ ./gthttp/src/
+COPY ./src/* ./src/
 
 # Full build
 RUN cargo build
