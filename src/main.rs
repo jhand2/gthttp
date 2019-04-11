@@ -16,6 +16,7 @@ use clap::{App, Arg};
 
 use pnet::packet::Packet;
 use pnet::packet::ethernet::{EthernetPacket, EtherTypes};
+use pnet::packet::tcp::TcpPacket;
 use pnet::packet::ipv4::Ipv4Packet;
 
 struct Arguments {
@@ -62,6 +63,40 @@ fn parse_args() -> Arguments {
     }
 }
 
+fn parse_tls_packet<'a>(eth: &'a EthernetPacket<'a>, target1: Ipv4Addr, target2: Ipv4Addr)
+        -> Result<TcpPacket<'a>, &'a str> {
+    match eth.get_ethertype() {
+        EtherTypes::Ipv4 => {
+            let ip_pkt = Ipv4Packet::new(eth.payload()).unwrap();
+            let src = ip_pkt.get_source();
+            let dst = ip_pkt.get_destination();
+            if (dst == target1 || dst == target2) && (src == target1 || src == target2) {
+                println!("Intercepted for {}", dst);
+                //Ok(tcp_pkt.unwrap())
+                Ok(TcpPacket::owned(ip_pkt.payload().to_vec()).unwrap())
+            } else {
+                Err("Packet was not intended for one of our targets")
+            }
+        },
+        _ => Err("Not an ipv4 packet")
+    }
+}
+
+fn intercept_packets(interface: &str, target1: Ipv4Addr, target2: Ipv4Addr) {
+    let (_tx, mut rx, _) = open_datalink_if(interface);
+    loop {
+        match rx.next() {
+            Ok(data) => {
+                let ethernet_packet = EthernetPacket::new(data).unwrap();
+                if let Ok(_tls_pkt) = parse_tls_packet(&ethernet_packet, target1, target2) {
+                    println!("Success");
+                }
+            },
+            Err(e) => panic!("An error occurred while reading: {}", e)
+        }
+    }
+}
+
 fn main() {
     let args = parse_args();
 
@@ -76,34 +111,9 @@ fn main() {
 
     // Spoof arp responses so we can receive traffic for the source and target
     let s2 = spoofer.clone();
-    let _arp_spoof_thread = thread::spawn(move || {
+    thread::spawn(move || {
         s2.spoof();
     });
 
-    // Receive intercepted packets
-    // TODO: Refactor this to somewhere else. Basically we just want to set up and SSL proxy that
-    // will create one trusted connection with the client and one trusted connection with the
-    // server
-    let (_tx, mut rx, _) = open_datalink_if(&args.interface);
-    loop {
-        match rx.next() {
-            Ok(data) => {
-                let ethernet_packet = EthernetPacket::new(data).unwrap();
-                let ethernet_payload = ethernet_packet.payload();
-
-                match ethernet_packet.get_ethertype() {
-                    EtherTypes::Ipv4 => {
-                        let ip_pkt = Ipv4Packet::new(ethernet_payload).unwrap();
-                        let src = ip_pkt.get_source();
-                        let dst = ip_pkt.get_destination();
-                        println!("src {}, dst {}", src, dst);
-                    },
-                    _ => continue
-                }
-            },
-            Err(e) => panic!("An error occurred while reading: {}", e)
-        }
-    }
-
-    //let _res = arp_spoof_thread.join();
+    intercept_packets(&args.interface, args.source_ip, args.target_ip);
 }
