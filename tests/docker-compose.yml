@@ -1,6 +1,6 @@
 version: '2'
 services:
-  gthttp:
+  arpspoofr:
     image: "gthttp:latest"
     stdin_open: true
     tty: true

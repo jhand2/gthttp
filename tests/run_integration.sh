@@ -4,7 +4,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 LOG_DIR=$SCRIPT_DIR/logs
 
 COMPOSE="docker-compose --no-ansi -f $SCRIPT_DIR/docker-compose.yml"
-GTHTTP="/gthttp/target/debug/gthttp"
+ARPSPOOFR="/gthttp/target/debug/arpspoofr"
 
 mkdir -p $LOG_DIR
 
@@ -23,7 +23,7 @@ run_tests() {
     echo $IP2
 
     # Target static IPs of the alpine machines
-    $COMPOSE exec gthttp $GTHTTP eth0 $IP1 $IP2
+    $COMPOSE exec arpspoofr $ARPSPOOFR eth0 $IP1 $IP2
 }
 
 up() {
